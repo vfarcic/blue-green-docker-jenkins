@@ -1,0 +1,6 @@
+- name: Executable is present
+  copy:
+    src: docker-compose
+    dest: /usr/local/bin/docker-compose
+    mode: 0755
+  tags: [docker]
