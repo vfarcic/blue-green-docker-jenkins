@@ -4,7 +4,6 @@ def swarmMaster = "10.100.192.200"
 def proxy = "10.100.192.200"
 def currentColor = getCurrentColor(swarmMaster, service)
 def nextColor = getNextColor(currentColor)
-def repo = "vfarcic/blue-green-docker-jenkins"
 
 node("cd") {
     env.PYTHONUNBUFFERED = 1

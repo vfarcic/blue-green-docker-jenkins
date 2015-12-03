@@ -34,6 +34,11 @@
                     <description></description>
                     <defaultValue>true</defaultValue>
                 </hudson.model.BooleanParameterDefinition>
+                <hudson.model.StringParameterDefinition>
+                    <name>repo</name>
+                    <description></description>
+                    <defaultValue>{{ item.service_owner }}/{{ item.service_name }}</defaultValue>
+                </hudson.model.StringParameterDefinition>
             </parameterDefinitions>
         </hudson.model.ParametersDefinitionProperty>
     </properties>
