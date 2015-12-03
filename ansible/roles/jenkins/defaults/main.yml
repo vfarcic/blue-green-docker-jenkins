@@ -3,7 +3,6 @@ home: /data/jenkins
 jobs: [
   {
     name: "books-ms",
-    service_owner: "vfarcic",
     service_name: "books-ms",
     repo: "vfarcic/blue-green-docker-jenkins",
     src: "service-workflow-config.xml",

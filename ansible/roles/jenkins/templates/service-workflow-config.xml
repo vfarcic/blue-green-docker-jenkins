@@ -17,7 +17,7 @@
                 <hudson.model.StringParameterDefinition>
                     <name>service</name>
                     <description></description>
-                    <defaultValue>{{ item.service_owner }}/{{ item.service_name }}</defaultValue>
+                    <defaultValue>{{ item.service_name }}</defaultValue>
                 </hudson.model.StringParameterDefinition>
                 <hudson.model.StringParameterDefinition>
                     <name>instances</name>
@@ -37,7 +37,7 @@
                 <hudson.model.StringParameterDefinition>
                     <name>repo</name>
                     <description></description>
-                    <defaultValue>{{ item.service_owner }}/{{ item.service_name }}</defaultValue>
+                    <defaultValue>{{ item.repo }}</defaultValue>
                 </hudson.model.StringParameterDefinition>
             </parameterDefinitions>
         </hudson.model.ParametersDefinitionProperty>

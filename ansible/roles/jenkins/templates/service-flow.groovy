@@ -20,9 +20,9 @@ node("cd") {
     stage "> Pre-Deployment"
     git url: "https://github.com/${repo}.git"
     if (build.toBoolean()) {
-        sh "sudo docker build -t ${service}-tests -f Dockerfile.test ."
+        sh "sudo docker build -t vfarcic/${service}-tests -f Dockerfile.test ."
         sh "sudo docker-compose run --rm tests"
-        def app = docker.build "${service}"
+        def app = docker.build "vfarcic/${service}"
         app.push()
     }
 
@@ -39,10 +39,11 @@ node("cd") {
 
     stage "> Post-Deployment"
     def address = getAddress(swarmMaster, service, nextColor)
-    env.DOCKER_HOST = ""
     try {
+        env.DOCKER_HOST = ""
         sh "docker-compose run --rm -e DOMAIN=http://$address integ"
     } catch (e) {
+        env.DOCKER_HOST = "tcp://${swarmMaster}:2375"
         sh "docker-compose stop app-${nextColor}"
         error("Pre-integration tests failed")
     }
@@ -72,7 +73,7 @@ node("cd") {
     }
     if (build.toBoolean()) {
         env.DOCKER_HOST = ""
-        sh "docker push ${service}-tests"
+        sh "docker push vfarcic/${service}-tests"
     }
 }
 
@@ -104,7 +105,6 @@ def getInstances(swarmMaster, service) {
 }
 
 def getAddress(swarmMaster, service, color) {
-    echo "http://${swarmMaster}:8500/v1/catalog/service/${service}-${color}"
     def serviceJson = "http://${swarmMaster}:8500/v1/catalog/service/${service}-${color}".toURL().text
     def result = new JsonSlurper().parseText(serviceJson)[0]
     return result.ServiceAddress + ":" + result.ServicePort
