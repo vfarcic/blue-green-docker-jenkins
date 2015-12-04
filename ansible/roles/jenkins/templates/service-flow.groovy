@@ -17,21 +17,11 @@ node("cd") {
             \"proxy_host=swarm-master\""
     }
 
-    stage "> Pre-Deployment"
-    git url: "https://github.com/${repo}.git"
-    if (build.toBoolean()) {
-        sh "sudo docker build -t vfarcic/${service}-tests -f Dockerfile.test ."
-        sh "sudo docker-compose run --rm tests"
-        def app = docker.build "vfarcic/${service}"
-        app.push()
-    }
-
     stage "> Deployment"
+    git url: "https://github.com/${repo}.git"
     env.DOCKER_HOST = "tcp://${swarmMaster}:2375"
     def instances = getInstances(swarmMaster, service)
-    if (build.toBoolean()) {
-        sh "docker-compose pull app-${nextColor}"
-    }
+    sh "docker-compose pull app-${nextColor}"
     sh "docker-compose --x-networking up -d db"
     sh "docker-compose rm -f app-${nextColor}"
     sh "docker-compose --x-networking scale app-${nextColor}=$instances"
@@ -70,10 +60,6 @@ node("cd") {
     if (currentColor != "") {
         env.DOCKER_HOST = "tcp://${swarmMaster}:2375"
         sh "docker-compose stop app-${currentColor}"
-    }
-    if (build.toBoolean()) {
-        env.DOCKER_HOST = ""
-        sh "docker push vfarcic/${service}-tests"
     }
 }
 

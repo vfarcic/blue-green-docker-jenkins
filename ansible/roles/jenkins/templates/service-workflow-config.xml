@@ -29,11 +29,6 @@
                     <description></description>
                     <defaultValue>true</defaultValue>
                 </hudson.model.BooleanParameterDefinition>
-                <hudson.model.BooleanParameterDefinition>
-                    <name>build</name>
-                    <description></description>
-                    <defaultValue>true</defaultValue>
-                </hudson.model.BooleanParameterDefinition>
                 <hudson.model.StringParameterDefinition>
                     <name>repo</name>
                     <description></description>
