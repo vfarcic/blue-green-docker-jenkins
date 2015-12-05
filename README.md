@@ -272,7 +272,7 @@ Please note that even though this script might look daunting at the beginning, w
 
 ![Workflow job settings screen](img/settings.png)
 
-The major drawback of the way we did things is the creation of Jenkins jobs through Ansible. While it did its job, it feels more like a workaround than a long term solution. The problem is, in my opinion, current Jenkins OSS solutions to manage jobs are even less productive. I invite you to try [CloudBees Jenkins Platform Enterprise Edition](https://www.cloudbees.com/products/cloudbees-jenkins-platform/enterprise-edition) if you're looking for more power behind Jenkins Workflow and templating.
+The major drawback of the way we did things is the creation of Jenkins jobs through Ansible. While it did its job, it feels more like a workaround than a long term solution. The problem is, in my opinion, that the current Jenkins OSS solutions to manage jobs are even less productive. I invite you to try [CloudBees Jenkins Platform Enterprise Edition](https://www.cloudbees.com/products/cloudbees-jenkins-platform/enterprise-edition) if you're looking for more power behind Jenkins Workflow and templating.
 
 
 
