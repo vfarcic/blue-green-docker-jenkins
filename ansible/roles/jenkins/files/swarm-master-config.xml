@@ -3,7 +3,7 @@
     <name>swarm-master</name>
     <description></description>
     <remoteFS>/data/jenkins_slaves/swarm-master</remoteFS>
-    <numExecutors>1</numExecutors>
+    <numExecutors>3</numExecutors>
     <mode>EXCLUSIVE</mode>
     <retentionStrategy class="hudson.slaves.RetentionStrategy$Always"/>
     <launcher class="hudson.plugins.sshslaves.SSHLauncher" plugin="ssh-slaves@1.9">

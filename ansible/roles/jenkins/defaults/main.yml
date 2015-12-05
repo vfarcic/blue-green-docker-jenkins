@@ -4,9 +4,8 @@ jobs: [
   {
     name: "books-ms",
     service_name: "books-ms",
-    repo: "vfarcic/blue-green-docker-jenkins",
-    src: "service-workflow-config.xml",
-    ping_address: "/api/v1/books"
+    repo: "vfarcic/books-ms",
+    src: "service-workflow-config.xml"
    }
 ]
 
