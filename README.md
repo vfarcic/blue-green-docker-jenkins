@@ -1,11 +1,24 @@
 Blue-Green Deployment Workflow To Docker Swarm with Jenkins
 ===========================================================
 
-The idea behind this article is to explore ways to deploy releases to [Docker Swarm](https://docs.docker.com/swarm/) without downtime. We'll use *blue-green* process. More info about the process and one possible implementation can be found in the [Blue-Green Deployment, Automation and Self-Healing Procedure](http://technologyconversations.com/2015/07/02/scaling-to-infinity-with-docker-swarm-docker-compose-and-consul-part-34-blue-green-deployment-automation-and-self-healing-procedure/) article. One of the downsides of the process we used in that article is Ansible itself. While it is probably the best tool for provisioning and orchestration, it had some downsides when we tried to use it as the tool to deploy containers especially if the process is complex. It lacked some constructs common in most programming languages. This time we'll try to implement the same process but using the [Jenkins Workflow Plugin] and a bit of Groovy scripts.
+The idea behind this article is to explore ways to deploy releases to [Docker Swarm](https://docs.docker.com/swarm/) without downtime. We'll use *blue-green* process. More info about the process and one possible implementation can be found in the [Blue-Green Deployment, Automation and Self-Healing Procedure](http://technologyconversations.com/2015/07/02/scaling-to-infinity-with-docker-swarm-docker-compose-and-consul-part-34-blue-green-deployment-automati!on-and-self-healing-procedure/) article. One of the downsides of the process we used in that article is Ansible itself. While it is probably the best tool for provisioning and orchestration, it had some downsides when we tried to use it as the tool to deploy containers especially if the process is complex. It lacked some constructs common in most programming languages. This time we'll try to implement the same process but using the [Jenkins Workflow Plugin](https://wiki.jenkins-ci.org/display/JENKINS/Workflow+Plugin) and a bit of Groovy scripts. The plugin was originally written by [CloudBees](https://www.cloudbees.com/) and is fully open sourced.
 
-TODO: Explain the BG process
+We'll use the Workflow to define a blue-green deployment process. In a nutshell, we should do the following.
 
-Let's see it in action first and then discuss how it was done.
+* Provision the Swarm cluster
+* Provision the proxy service
+* Pull the latest release
+* Deploy the latest release in parallel with the current one
+* Run pre-integration tests that will confirm that everything seems to be working correctly
+* Update the proxy service
+* Run post-integration tests that will confirm that everything seems to be working correctly through the proxy service
+* Stop the previous release
+
+On top of those steps, the process should be capable of rolling back in case something goes wrong. Additional feature we'll introduce is the request to scale the service (and maintain scaled number in subsequent deployments).
+
+Let's see the job in action first and then discuss how it was done later.
+
+
 
 Setting Up Docker Swarm Cluster and Jenkins
 -------------------------------------------
@@ -49,7 +62,7 @@ Let's start the build. Since the first run last a bit longer than consecutive ru
 
 ![Workflow job build screen](img/build.png)
 
-While the job is running, let's take a quick look at the [docker-compose.yml](https://github.com/vfarcic/blue-green-docker-jenkins/blob/master/docker-compose.yml) that we'll use to run tests and deploy the service.
+While the job is running, let's take a quick look at the [docker-compose.yml](https://github.com/vfarcic/books-ms/blob/master/docker-compose-jenkins.yml) that we'll use to run tests and deploy the service.
 
 ```yml
 app:
@@ -112,6 +125,8 @@ Steps:
 
 ```groovy
 node("cd") {
+    env.PYTHONUNBUFFERED = 1
+
     stage "> Provisioning"
     if (provision.toBoolean()) {
         sh "ansible-playbook /vagrant/ansible/swarm.yml \
@@ -120,7 +135,6 @@ node("cd") {
             -i /vagrant/ansible/hosts/prod --extra-vars \
             \"proxy_host=swarm-master\""
     }
-...
 ```
 
 We started by declaring that the steps will run inside the Jenkins node called or labeled *cd* (short for continuous deployment). For simplicity, in this case *cd* is one of the labels of the *swarm-master* node. In production, you should run as much as possible in dedicated servers and not in production. Next is the *stage* declaration that serves multiple purposes. It marks a group of steps, allows us to constrain concurrency and, if you choose to use [CloudBees Jenkins Enterprise Edition](https://www.cloudbees.com/products/cloudbees-jenkins-platform/enterprise-edition), provides visualization, ability to restart from selected stage and few other features. Below the stage, you'll notice that the commands are inside an `if` statement. The value of the *provision* variable comes from the checkbox that you've see in the *build* screen (more about those parameters later on). The "meat" of this snippet are two `sh` statement. It is one of the step types provided by the Workflow plugin and, as you might have guessed, it runs any shell command we specify. In this case, we're using it to run Ansible playbooks that will take care of provisioning. Please note that we did not install nginx when we set up the servers. This script will do that for us.
@@ -134,7 +148,6 @@ Steps:
 ```groovy
     stage "> Deployment"
     git url: "https://github.com/${repo}.git"
-    env.DOCKER_HOST = "tcp://${swarmMaster}:2375"
 ```
 
 Please note the usage of the `${repo}`. This is another case of us utilizing parameters that can be specified in the build screen. We're also declaring environment variable *DOCKER_HOST* that points to the *swarm-master* node. From this moment on, all Docker commands we'll run will be sent to Docker Swarm.
@@ -149,11 +162,16 @@ Steps:
 
 ```groovy
     env.DOCKER_HOST = "tcp://${swarmMaster}:2375"
-    sh "docker-compose pull app-${nextColor}"
-    sh "docker-compose --x-networking up -d db"
-    sh "docker-compose rm -f app-${nextColor}"
-    sh "docker-compose --x-networking scale app-${nextColor}=$instances"
-    sh "curl -X PUT -d $instances http://${swarmMaster}:8500/v1/kv/${service}/instances"
+    sh "docker-compose -f docker-compose-jenkins.yml \
+        pull app-${nextColor}"
+    sh "docker-compose -f docker-compose-jenkins.yml \
+        --x-networking up -d db"
+    sh "docker-compose -f docker-compose-jenkins.yml \
+        rm -f app-${nextColor}"
+    sh "docker-compose -f docker-compose-jenkins.yml \
+        --x-networking scale app-${nextColor}=$instances"
+    sh "curl -X PUT -d $instances \
+        http://${swarmMaster}:8500/v1/kv/${service}/instances"
 ```
 
 First we are setting the *DOCKER_HOST* variable to point to the Swarm Master. From now on, all Docker commands will be sent to that IP/port. Next we're pulling the application. That is followed with deployment of the database and and removal of the target we are about to deploy. Than we are running the service itself. Please note that we are utilizing the *instances* variable to scale the service. Finally, we are sending the number of instances to Consul so that same number is used the next time we run the deployment (unless we change it explicitelly in the Jenkins build screen).
@@ -163,17 +181,20 @@ Now that the service is deployed somewhere inside the Swarm cluster, we can move
 Steps:
 
 * Locate the newly deployed service
-* Run integration tests
+* Run pre-integration tests
+* Stop the new release if tests fail
 
 ```groovy
     stage "> Post-Deployment"
     def address = getAddress(swarmMaster, service, nextColor)
     try {
         env.DOCKER_HOST = ""
-        sh "docker-compose run --rm -e DOMAIN=http://$address integ"
+        sh "docker-compose -f docker-compose-jenkins.yml \
+            run --rm -e DOMAIN=http://$address integ"
     } catch (e) {
         env.DOCKER_HOST = "tcp://${swarmMaster}:2375"
-        sh "docker-compose stop app-${nextColor}"
+        sh "docker-compose -f docker-compose-jenkins.yml \
+            stop app-${nextColor}"
         error("Pre-integration tests failed")
     }
 ```
@@ -189,43 +210,66 @@ Steps:
 * Reload nginx
 
 ```groovy
-    sh "consul-template -consul ${swarmMaster}:8500 \
-        -template 'nginx-upstreams-${nextColor}.ctmpl:nginx-upstreams.conf' -once"
-    stash includes: 'nginx-*.conf', name: 'nginx'
-}
-node("lb") {
-    unstash 'nginx'
-    sh "sudo cp nginx-includes.conf /data/nginx/includes/${service}.conf"
-    sh "sudo cp nginx-upstreams.conf /data/nginx/upstreams/${service}.conf"
-    sh "docker kill -s HUP nginx"
-}
+    updateProxy(swarmMaster, service, nextColor);
 ```
 
 Changing the nginx configuration is easy with [Consul Template](https://github.com/hashicorp/consul-template). We need a template that, in this case, is stored in the service repository (*nginx-upstreams-blue.ctmpl* and *nginx-upstreams-green.ctmpl*) and run the command. The result is, in this case, the *nginx-upstreams.con* file generated from the template and data stored in Consul.
 
-Please note that everything we did by now was executed in the *cd* node so that there is minimal impact on production servers. Now came the moment to switch to the proxy server (*lb*). For that reason we had to *stash* (archive) the configuration files and, once switched to the *lb* node, unstash (unarchive) them. From there on, we simply copied the files to nginx directories and run the command that reloads it.
+Please note that everything we did by now was executed in the *cd* node so that there is minimal impact on production servers. Now came the moment to switch to the proxy server (*lb*). For details of the implementation, please take a look at the *updateProxy* function in the [service-flow.groovy](https://github.com/vfarcic/blue-green-docker-jenkins/blob/master/ansible/roles/jenkins/templates/service-flow.groovy) source code.
 
-With the first round of integration tests we verified that everything works correctly except the proxy itself. The goal was to test as much as possible without affecting our users. Even though it is not part of this article, before the container was built and pushed to the hub, I run all sorts of unit, functional and any other type of tests that can be performed without having the service deployed. Later on we run integration tests that confirmed that the service (after being deployed) is integrated with the database. Now is the time to do the final round of integration tests. We should verify that the changes in the proxy configuration
+With the first round of integration tests we verified that everything works correctly except the proxy itself. The goal was to test as much as possible without affecting our users. Even though it is not part of this article, before the container was built and pushed to the hub, I run all sorts of unit, functional and any other type of tests that can be performed without having the service deployed. Later on we run integration tests that confirmed that the service (after being deployed) is integrated with the database. Now is the time to do the final round of integration tests. We should verify that the changes in the proxy configuration were done correctly and the service is indeed accessible through the proxy.
+
+Steps:
+
+* Run post-integration tests
+* Revert proxy reconfiguration if tests failed
+* Stop the new release if tests fail
 
 ```groovy
-node("cd") {
     try {
         env.DOCKER_HOST = ""
-        sh "docker-compose run --rm -e DOMAIN=http://${proxy} integ"
+        sh "docker-compose -f docker-compose-jenkins.yml \
+            run --rm -e DOMAIN=http://${proxy} integ"
     } catch (e) {
         if (currentColor != "") {
             updateProxy(swarmMaster, service, currentColor)
         }
         env.DOCKER_HOST = "tcp://${swarmMaster}:2375"
-        sh "docker-compose stop app-${nextColor}"
+        sh "docker-compose -f docker-compose-jenkins.yml \
+            stop app-${nextColor}"
         error("Post-integration tests failed")
     }
-}
+    sh "curl -X PUT -d ${nextColor} http://${swarmMaster}:8500/v1/kv/${service}/color"
 ```
+
+This block is almost the same as the one we have for pre-integration tests. The major difference is that this time we are not testing the service directly through its IP and port but going through the proxy in the same way service consumers will be accessing it. If tests fail, not only that we need to stop the new release but we also have to revert changes to the nginx configuration. Finally, if everything passed successfully, we're updating Consul with the information about the color we just deployed.
+
+We're almost done. The service is deployed, tested (multiple times) and the proxy has been changed accordingly. The only thing left is a bit of a clean up.
+
+Steps:
+
+* Stop the old release (unless the first release was just deployed)
+
+```groovy
+    if (currentColor != "") {
+        env.DOCKER_HOST = "tcp://${swarmMaster}:2375"
+        sh "docker-compose -f docker-compose-jenkins.yml \
+            stop app-${currentColor}"
+    }
+```
+
+We're finished with the exploration of the Jenkins workflow script used to perform blue-green deployment to Docker Swarm. Hopefully, by this time the first run of the Jenkins build is finished. The main culprit for the slowness is the tests container with its virtual size over 2GB. While in this cases we used it only to run backend integration tests, in few other occasions I used it to run front-end tests running on FireFox and Chrome and full back-end test suite, it contains JDK, Scala, NodeJS, a lot of Bower and Scala libraries, and so on.
 
 ![Workflow console screen](img/console.png)
 
-TODO: Mention CloudBees Jenkins Platform Enterprise Edition
+If looking at this huge log is too demanding, experiment with the "Workflow Steps" link from the left-hand menu. It shows separate logs for each step in the script.
+
+Hopefully this article gave you an overview of a possible steps we might need to run for the successful execution of blue-green deployment to Docker Swarm. More importantly, I hope you saw the advantages Jenkins Workflow plugin gives over more common ways to utilize jobs. The same process would probably require multiple jobs that would be much harder to maintain. Moreover, reading and writing Groovy scripts is much easier and faster than trying to fight the standard Jenkins jobs XML syntax. This script can and should be in the source code repository. Any change to this job can be done in the same way as we normally change the code.
+
+Please note that even though this script might look daunting at the beginning, with a small adaptation for your own organization, it could easily be reused to deploy many different services. As long as certain naming conventions are used (mainly in the way we name docker-compose.yml targets), you should be able to reuse it across most (if not all) container deployments.
+
+The major drawback of the way we did things is the creation of Jenkins jobs through Ansible. While it did its job, it feels more like a workaround than a long term solution. The problem is, in my opinion, current Jenkins OSS solutions to manage jobs are even less productive. I invite you to try [CloudBees Jenkins Platform Enterprise Edition](https://www.cloudbees.com/products/cloudbees-jenkins-platform/enterprise-edition) if you're looking for more power behind Jenkins Workflow and templating.
+
 
 
 

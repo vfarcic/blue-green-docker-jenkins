@@ -21,39 +21,48 @@ node("cd") {
     stage "> Deployment"
     git url: "https://github.com/${repo}.git"
     env.DOCKER_HOST = "tcp://${swarmMaster}:2375"
-    sh "docker-compose -f docker-compose-jenkins.yml pull app-${nextColor}"
-    sh "docker-compose -f docker-compose-jenkins.yml--x-networking up -d db"
-    sh "docker-compose -f docker-compose-jenkins.yml rm -f app-${nextColor}"
+    sh "docker-compose -f docker-compose-jenkins.yml \
+        pull app-${nextColor}"
+    sh "docker-compose -f docker-compose-jenkins.yml \
+        --x-networking up -d db"
+    sh "docker-compose -f docker-compose-jenkins.yml \
+        rm -f app-${nextColor}"
     sh "docker-compose -f docker-compose-jenkins.yml \
         --x-networking scale app-${nextColor}=$instances"
-    sh "curl -X PUT -d $instances http://${swarmMaster}:8500/v1/kv/${service}/instances"
+    sh "curl -X PUT -d $instances \
+        http://${swarmMaster}:8500/v1/kv/${service}/instances"
 
     stage "> Post-Deployment"
     def address = getAddress(swarmMaster, service, nextColor)
     try {
         env.DOCKER_HOST = ""
-        sh "docker-compose -f docker-compose-jenkins.yml run --rm -e DOMAIN=http://$address integ"
+        sh "docker-compose -f docker-compose-jenkins.yml \
+            run --rm -e DOMAIN=http://$address integ"
     } catch (e) {
         env.DOCKER_HOST = "tcp://${swarmMaster}:2375"
-        sh "docker-compose -f docker-compose-jenkins.yml stop app-${nextColor}"
+        sh "docker-compose -f docker-compose-jenkins.yml \
+            stop app-${nextColor}"
         error("Pre-integration tests failed")
     }
     updateProxy(swarmMaster, service, nextColor);
     try {
         env.DOCKER_HOST = ""
-        sh "docker-compose -f docker-compose-jenkins.yml run --rm -e DOMAIN=http://${proxy} integ"
+        sh "docker-compose -f docker-compose-jenkins.yml \
+            run --rm -e DOMAIN=http://${proxy} integ"
     } catch (e) {
         if (currentColor != "") {
             updateProxy(swarmMaster, service, currentColor)
         }
         env.DOCKER_HOST = "tcp://${swarmMaster}:2375"
-        sh "docker-compose -f docker-compose-jenkins.yml stop app-${nextColor}"
+        sh "docker-compose -f docker-compose-jenkins.yml \
+            stop app-${nextColor}"
         error("Post-integration tests failed")
     }
     sh "curl -X PUT -d ${nextColor} http://${swarmMaster}:8500/v1/kv/${service}/color"
     if (currentColor != "") {
         env.DOCKER_HOST = "tcp://${swarmMaster}:2375"
-        sh "docker-compose -f docker-compose-jenkins.yml stop app-${currentColor}"
+        sh "docker-compose -f docker-compose-jenkins.yml \
+            stop app-${currentColor}"
     }
 }
 
@@ -91,7 +100,9 @@ def getAddress(swarmMaster, service, color) {
 }
 
 def updateProxy(swarmMaster, service, color) {
-    sh "consul-template -consul ${swarmMaster}:8500 -template 'nginx-upstreams-${color}.ctmpl:nginx-upstreams.conf' -once"
+    sh "consul-template -consul ${swarmMaster}:8500 \
+        -template 'nginx-upstreams-${color}.ctmpl:nginx-upstreams.conf' \
+        -once"
     stash includes: 'nginx-*.conf', name: 'nginx'
     node("lb") {
         unstash 'nginx'
