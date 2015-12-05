@@ -1,6 +1,3 @@
-Blue-Green Deployment Workflow To Docker Swarm with Jenkins
-===========================================================
-
 The idea behind this article is to explore ways to deploy releases to [Docker Swarm](https://docs.docker.com/swarm/) without downtime. We'll use *blue-green* process. More info about the process and one possible implementation can be found in the [Blue-Green Deployment, Automation and Self-Healing Procedure](http://technologyconversations.com/2015/07/02/scaling-to-infinity-with-docker-swarm-docker-compose-and-consul-part-34-blue-green-deployment-automati!on-and-self-healing-procedure/) article. One of the downsides of the process we used in that article is Ansible itself. While it is probably the best tool for provisioning and orchestration, it had some downsides when we tried to use it as the tool to deploy containers. This is especially evident when the process is complex. Ansible lacks some constructs common in most programming languages. This time we'll try to implement the same process but using the [Jenkins Workflow Plugin](https://wiki.jenkins-ci.org/display/JENKINS/Workflow+Plugin) and a bit of Groovy scripting. The plugin was originally written by [CloudBees](https://www.cloudbees.com/) and is fully open sourced.
 
 ![Docker and Jenkins](img/docker-jenkins.png)
