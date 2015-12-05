@@ -3,6 +3,8 @@ Blue-Green Deployment Workflow To Docker Swarm with Jenkins
 
 The idea behind this article is to explore ways to deploy releases to [Docker Swarm](https://docs.docker.com/swarm/) without downtime. We'll use *blue-green* process. More info about the process and one possible implementation can be found in the [Blue-Green Deployment, Automation and Self-Healing Procedure](http://technologyconversations.com/2015/07/02/scaling-to-infinity-with-docker-swarm-docker-compose-and-consul-part-34-blue-green-deployment-automati!on-and-self-healing-procedure/) article. One of the downsides of the process we used in that article is Ansible itself. While it is probably the best tool for provisioning and orchestration, it had some downsides when we tried to use it as the tool to deploy containers especially if the process is complex. It lacked some constructs common in most programming languages. This time we'll try to implement the same process but using the [Jenkins Workflow Plugin](https://wiki.jenkins-ci.org/display/JENKINS/Workflow+Plugin) and a bit of Groovy scripts. The plugin was originally written by [CloudBees](https://www.cloudbees.com/) and is fully open sourced.
 
+![Docker and Jenkins](img/docker-jenkins.png)
+
 We'll use the Workflow to define a blue-green deployment process. In a nutshell, we should do the following.
 
 * Provision the Swarm cluster
@@ -266,7 +268,9 @@ If looking at this huge log is too demanding, experiment with the "Workflow Step
 
 Hopefully this article gave you an overview of a possible steps we might need to run for the successful execution of blue-green deployment to Docker Swarm. More importantly, I hope you saw the advantages Jenkins Workflow plugin gives over more common ways to utilize jobs. The same process would probably require multiple jobs that would be much harder to maintain. Moreover, reading and writing Groovy scripts is much easier and faster than trying to fight the standard Jenkins jobs XML syntax. This script can and should be in the source code repository. Any change to this job can be done in the same way as we normally change the code.
 
-Please note that even though this script might look daunting at the beginning, with a small adaptation for your own organization, it could easily be reused to deploy many different services. As long as certain naming conventions are used (mainly in the way we name docker-compose.yml targets), you should be able to reuse it across most (if not all) container deployments.
+Please note that even though this script might look daunting at the beginning, with a small adaptation for your own organization, it could easily be reused to deploy many different services. As long as certain naming conventions are used (mainly in the way we name docker-compose.yml targets), you should be able to reuse it across most (if not all) container deployments. Please open the job settings screen to see it in more details.
+
+![Workflow job settings screen](img/settings.png)
 
 The major drawback of the way we did things is the creation of Jenkins jobs through Ansible. While it did its job, it feels more like a workaround than a long term solution. The problem is, in my opinion, current Jenkins OSS solutions to manage jobs are even less productive. I invite you to try [CloudBees Jenkins Platform Enterprise Edition](https://www.cloudbees.com/products/cloudbees-jenkins-platform/enterprise-edition) if you're looking for more power behind Jenkins Workflow and templating.
 
